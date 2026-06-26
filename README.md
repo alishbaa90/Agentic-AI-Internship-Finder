@@ -32,4 +32,4 @@ An automated end-to-end agentic AI workflow that acts as a personalized career a
 
 ---
 
-
+<img width="1366" height="640" alt="Image" src="https://github.com/user-attachments/assets/37c939be-8545-4d5f-aae1-616943dbf3bd" />
