@@ -1,0 +1,224 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "34f3bdfe-b821-4937-8718-30f3716e7ab8",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1Ay0B2YkxSjWBMFZL81IH-nZEik2A0st1",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "12eaa4a8-b588-4e74-81bd-5d0cc4d5fd4b",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "nkj0LDPX0qkr6JAy",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "da096b72-ef39-4463-b05a-35e130265a75",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert AI Career Matcher. Your sole objective is to analyze \nthe candidate's resume passed to you and find relevant job opportunities \nusing the provided Code Tool.\n\n=== CANDIDATE RESUME START ===\n{{ $json.text }}\n=== CANDIDATE RESUME END ===\n\nFollow these steps exactly:\n1. Read ONLY the resume text provided above between the markers.\n   - Extract: skills, academic major, domain (tech/finance/marketing/etc)\n   - IGNORE everything from previous executions\n   - NEVER assume the candidate is in tech unless resume explicitly says so\n\n2. Based on the resume domain, formulate ONE targeted search query:\n   - Tech resume → \"software developer internship pakistan\"\n   - Finance resume → \"finance internship pakistan\"  \n   - Marketing resume → \"digital marketing internship pakistan\"\n   - And so on for any other domain\n\n3. Call the Code Tool with that query to get live job listings.\n\n4. Parse the HTML results and return ONLY jobs matching this \n   candidate's actual background.\n\nReturn ONLY a raw JSON array. Each object must have:\n- job_title\n- company_name  \n- location\n- apply_link\n- matching_reason\n\nSTRICT RULES:\n- Use ONLY data from Code Tool results\n- If tool returns empty → {\"jobs\": [], \"error\": \"No live data retrieved\"}\n- NEVER invent jobs from training data\n- If resume is finance → return finance jobs, NOT tech jobs\n- If resume is HR → return HR jobs, NOT tech jobs",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "7d0deecf-c78c-4abb-980c-583ef2fc1b30",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        208
+      ],
+      "id": "0c4591ef-7f65-455b-b5a5-5dcbe2f8435d",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "zGD4KOdSGtWtQb3R",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Use this tool to search the internet for any type of job or internship opportunities based on the generated query string.",
+        "jsCode": "const searchTerm = (typeof query !== 'undefined' && query) || (typeof input !== 'undefined' && input);\n\nif (!searchTerm) {\n    return \"Error: No search query provided by the AI Agent.\";\n}\n\nconst url = `https://lite.duckduckgo.com/lite/`;\nconst fullQuery = `${searchTerm} internship pakistan`.trim();\n\nlet responseText = \"\";\ntry {\n    responseText = await this.helpers.httpRequest({\n        method: 'POST',\n        url: url,\n        headers: {\n            'Content-Type': 'application/x-www-form-urlencoded',\n            'Origin': 'https://lite.duckduckgo.com',\n            'Referer': 'https://lite.duckduckgo.com/'\n        },\n        body: `q=${encodeURIComponent(fullQuery)}&kl=pk-en&b=`,\n        returnFullResponse: false\n    });\n} catch (error) {\n    return `HTTP Request Error: ${error.message}`;\n}\n\n// Clean HTML text smoothly\nconst cleanHtml = responseText.replace(/<\\/?[^>]+(>|$)/g, \" \").replace(/\\s+/g, \" \").trim();\n\nif (cleanHtml.length > 100) {\n    return cleanHtml.substring(0, 4000); \n}\n\nreturn \"No jobs found or request blocked.\";"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        784,
+        208
+      ],
+      "id": "d59a91fa-8dcc-4e9d-9a21-f144824328f4",
+      "name": "Code Tool1"
+    },
+    {
+      "parameters": {
+        "sendTo": "alishbasiraj09@gmail.com",
+        "subject": "Your Daily AI-Filtered Internship Matches",
+        "message": "={{ \n(function() {\n  const rawOutput = $node[\"AI Agent\"].json[\"output\"];\n  const jobs = typeof rawOutput === \"string\" ? JSON.parse(rawOutput) : rawOutput;\n  \n  return \"<h3>Hello Alishba, Here are your tailored internship matches for today:</h3><ul>\" + \n  jobs.map(job => `\n    <li>\n      <strong>Position:</strong> ${job.job_title} <br>\n      <strong>Company/Platform:</strong> ${job.company_name} | <strong>Location:</strong> ${job.location} <br>\n      <strong>Why it matches:</strong> <em>${job.matching_reason}</em> <br>\n      <a href=\"https://${job.apply_link.replace(/^https?:\\/\\//, '')}\" target=\"_blank\" style=\"color: #1a73e8; font-weight: bold; text-decoration: none;\">👉 Click Here to Apply</a>\n      <br><br>\n    </li>\n  `).join('') + \n  \"</ul><hr><p style='font-size: 11px; color: gray;'>Automated by your Agentic AI Workflow using n8n & Gemini.</p>\";\n})()\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        0
+      ],
+      "id": "ccf7282a-71d8-4b65-b485-99e9537e9e16",
+      "name": "Send a message",
+      "webhookId": "838a114d-a8b8-4896-8e15-ea2af8c52326",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hFlsVe1fCYUgInBj",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Tool1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "95acf221-2a7e-4c93-b9ce-9d2c7fca46a2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "33c64d451aa06eba59242bfe34c9ad073b47e184695ef70daf15428ef2dc7737"
+  },
+  "nodeGroups": [],
+  "id": "QrWTmH3hK19DhOAk",
+  "tags": []
+}
